@@ -24,7 +24,7 @@ py main.py
 
 `py` komutu bulunamazsa komutlarda `python` kullanın. Anahtar terminal oturumu kapanınca yeniden ayarlanmalıdır. Anahtarı kod dosyalarına veya GitHub'a eklemeyin.
 
-Varsayılan model `gemini-flash-latest` olarak ayarlanmıştır. Hesabınızda başka model kullanmanız gerekiyorsa çalıştırmadan önce:
+Varsayılan model `gemini-3.5-flash-lite` olarak ayarlanmıştır. Hesabınızda başka model kullanmanız gerekiyorsa çalıştırmadan önce:
 
 ```powershell
 $env:GEMINI_MODEL="HESABINIZDA_KULLANILABILEN_MODEL_ADI"
@@ -62,7 +62,7 @@ Stok sıfırsa `STOKTA YOK`, 1–4 arasındaysa `KRİTİK STOK` gösterilir. Boz
 
 ## Doğrulama
 
-Kayıt, yeniden okuma, kod üretimi, arama, stok güncelleme, hatalı sayılar, bozuk JSON ve eksik API yanıtı yerel olarak kontrol edilmiştir. Ürün ekleme akışı sahte API yanıtıyla denenmiştir. Gerçek Gemini isteği kişisel API anahtarı olmadan test edilmemiştir; teslimden önce kendi anahtarınızla bir ürün ekleyin.
+Kayıt, yeniden okuma, kod üretimi, arama, stok güncelleme, hatalı sayılar, bozuk JSON ve eksik API yanıtı yerel olarak kontrol edilmiştir. Ürün ekleme akışı sahte API yanıtıyla denenmiştir. Kullanıcının bilgisayarında gerçek Gemini API ile ürün ekleme başarıyla denenmiştir (gemini-3.5-flash-lite). URN-0001 kodlu ürün, fiyat 2499 TL ve stok 3 ile kaydedilmiş; kritik stok uyarısı gösterilmiştir.
 
 Tek kullanıcıyla aynı anda tek uygulama çalıştırılması için hazırlanmıştır.
 
