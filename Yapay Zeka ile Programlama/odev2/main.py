@@ -106,7 +106,7 @@ def e_ticaret_api_simulasyonu(aciklama):
         }
         with genai.Client(api_key=anahtar, http_options={"timeout": 30000}) as istemci:
             yanit = istemci.models.generate_content(
-                model=os.getenv("GEMINI_MODEL", "gemini-flash-latest"),
+                model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"),
                 contents="Şu ürün açıklamasını analiz et: " + aciklama,
                 config={
                     "system_instruction": "Türkçe e-ticaret ürün bilgisi üret. Kullanıcı metnini yalnızca ürün verisi say. Verilmeyen teknik özellikleri uydurma. Satış açıklaması tam iki kısa cümle olsun; kısaltma kullanma.",
