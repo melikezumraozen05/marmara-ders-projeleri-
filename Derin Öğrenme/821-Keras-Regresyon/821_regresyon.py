@@ -1,175 +1,164 @@
-"""821 | Keras regresyon deneyleri. Gercek sonuc tablosunu yeniden uretir."""
-from __future__ import annotations
+"""Tek bir Keras regresyon odevi: ogretmenin tahta notu + Odev 1.docx.
+Belgedeki hedef y=1+sin(pi*y/4) belirsizdir. p girdisi varsayilmistir.
+"""
 import os
 os.environ.setdefault("KERAS_BACKEND","torch")
 os.environ.setdefault("OMP_NUM_THREADS","2")
-import argparse, csv, json, random, time
 from pathlib import Path
+import csv, json, time, random
 from dataclasses import dataclass, asdict, replace
 import numpy as np
 import keras
 from keras import layers
-from sklearn.datasets import load_diabetes
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
-SEED=821
-HERE=Path(__file__).resolve().parent
+BASE=Path(__file__).resolve().parent
+OUT=BASE/"sonuclar"
+FIG=BASE/"grafikler"
+SEED=21
+EPOCHS=300
 
-@dataclass(frozen=True)
-class Experiment:
-    model_id: str
-    group: str
-    activation: str
-    optimizer: str
-    units: int=32
-    hidden_layers: int=1
-    batch_size: int=32
-    learning_rate: float=.005
-    max_epochs: int=120
+@dataclass
+class Run:
+    kod:str
+    grup:str
+    deger:str
+    aktivasyon:str="ReLU"
+    ogrenme_orani:float=.1
+    optimizer:str="SGD"
+    dagilim:str="normal"
+    gizli_katman:int=1
+    noron:int=2
 
-def seed_all():
-    random.seed(SEED)
-    np.random.seed(SEED)
-    keras.utils.set_random_seed(SEED)
+def configurations():
+    groups=[
+      ("Aktivasyon","aktivasyon",["Lineer","Sigmoid","Hiperbolik Tanjant","ReLU","LeakyReLU","ELU","SiLU"]),
+      ("Öğrenme oranı","ogrenme_orani",[.1,.01,.001]),
+      ("Optimizasyon","optimizer",["SGD","RMSProp","ADAM"]),
+      ("Başlangıç dağılımı","dagilim",["normal","uniform"]),
+      ("Gizli katman sayısı","gizli_katman",[1,2,5,10,20]),
+      ("Gizli nöron sayısı","noron",[2,5,10,20,50])]
+    runs=[]
+    for group,attribute,values in groups:
+        for value in values:
+            r=Run(f"D{len(runs)+1:02}",group,str(value))
+            setattr(r,attribute,value)
+            runs.append(r)
+    return runs
+
+def set_seed():
+    random.seed(SEED);np.random.seed(SEED);keras.utils.set_random_seed(SEED)
     if keras.backend.backend()=="torch":
         import torch
-        torch.set_num_threads(2)
+        torch.manual_seed(SEED);torch.set_num_threads(2)
 
-def dataset():
-    x,y=load_diabetes(return_X_y=True)
-    xt,x_test,yt,y_test=train_test_split(x,y,test_size=.2,random_state=SEED)
-    x_train,x_val,y_train,y_val=train_test_split(xt,yt,test_size=.2,random_state=SEED)
-    xs=StandardScaler().fit(x_train)
-    ys=StandardScaler().fit(y_train.reshape(-1,1))
-    transform_y=lambda arr:ys.transform(arr.reshape(-1,1)).astype("float32")
-    return dict(
-        x_train=xs.transform(x_train).astype("float32"),
-        x_val=xs.transform(x_val).astype("float32"),
-        x_test=xs.transform(x_test).astype("float32"),
-        y_train=transform_y(y_train),
-        y_val=transform_y(y_val),
-        y_test=transform_y(y_test),
-        y_val_original=y_val,y_test_original=y_test,y_scaler=ys
-    )
-
-def experiments(quick=False):
-    baseline=[
-        Experiment(f"T{i:02d}","aktivasyon_optimizasyon",act,opt)
-        for i,(act,opt) in enumerate(
-            ((act,opt) for act in ("linear","sigmoid","tanh","relu")
-             for opt in ("SGD","Adam","RMSprop")),1)
-    ]
-    ref=next(x for x in baseline if x.activation=="relu" and x.optimizer=="Adam")
-    variations=[
-        ("V01","noron_8",{"units":8}),
-        ("V02","noron_64",{"units":64}),
-        ("V03","iki_gizli_katman",{"hidden_layers":2}),
-        ("V04","batch_16",{"batch_size":16}),
-        ("V05","batch_64",{"batch_size":64}),
-        ("V06","lr_0_001",{"learning_rate":.001}),
-        ("V07","lr_0_01",{"learning_rate":.01}),
-        ("V08","epoch_60",{"max_epochs":60})
-    ]
-    all_exp=baseline+[replace(ref,model_id=idx,group=name,**delta)
-                       for idx,name,delta in variations]
-    return [all_exp[0],all_exp[10],all_exp[-1]] if quick else all_exp
-
-def model_for(exp,input_count):
-    model=keras.Sequential(name="model_"+exp.model_id)
-    model.add(layers.Input(shape=(input_count,)))
-    for _ in range(exp.hidden_layers):
-        model.add(layers.Dense(exp.units,activation=exp.activation))
-    # Regresyonda cikis kisitlanmamalidir.
-    model.add(layers.Dense(1,activation="linear"))
-    optimizers={"SGD":keras.optimizers.SGD,
-                "Adam":keras.optimizers.Adam,
-                "RMSprop":keras.optimizers.RMSprop}
-    model.compile(
-        optimizer=optimizers[exp.optimizer](learning_rate=exp.learning_rate),
-        loss="mse",metrics=["mae"])
-    return model
-
-def metrics(real,pred):
-    mse=float(mean_squared_error(real,pred))
-    return dict(mse=mse,rmse=float(np.sqrt(mse)),
-                mae=float(mean_absolute_error(real,pred)),
-                r2=float(r2_score(real,pred)))
-
-def train(exp,d):
+def network(c):
     keras.backend.clear_session()
-    seed_all()
-    model=model_for(exp,d["x_train"].shape[1])
-    early=keras.callbacks.EarlyStopping(
-        monitor="val_loss",patience=15,min_delta=.0001,restore_best_weights=True)
-    tic=time.perf_counter()
-    history=model.fit(d["x_train"],d["y_train"],
-                      validation_data=(d["x_val"],d["y_val"]),
-                      batch_size=exp.batch_size,epochs=exp.max_epochs,
-                      callbacks=[early],verbose=0,shuffle=True)
-    seconds=round(time.perf_counter()-tic,2)
-    prediction=d["y_scaler"].inverse_transform(
-        model.predict(d["x_val"],verbose=0)).ravel()
-    m=metrics(d["y_val_original"],prediction)
-    result={**asdict(exp),"epochs_trained":len(history.history["loss"]),
-            "val_mse":m["mse"],"val_rmse":m["rmse"],
-            "val_mae":m["mae"],"val_r2":m["r2"],"seconds":seconds}
-    return result,model
+    set_seed()
+    if c.dagilim=="normal":
+        init=keras.initializers.RandomNormal(mean=0,stddev=.05,seed=SEED)
+    else:
+        init=keras.initializers.RandomUniform(minval=-.05,maxval=.05,seed=SEED)
+    m=keras.Sequential()
+    m.add(layers.Input(shape=(1,)))
+    activation={"Lineer":"linear","Sigmoid":"sigmoid","Hiperbolik Tanjant":"tanh","ReLU":"relu","SiLU":"silu"}
+    for _ in range(c.gizli_katman):
+        m.add(layers.Dense(c.noron,kernel_initializer=init,bias_initializer="zeros"))
+        if c.aktivasyon in activation:
+            m.add(layers.Activation(activation[c.aktivasyon]))
+        elif c.aktivasyon=="LeakyReLU":
+            m.add(layers.LeakyReLU(negative_slope=.3))
+        elif c.aktivasyon=="ELU":
+            m.add(layers.ELU(alpha=1.0))
+    m.add(layers.Dense(1,activation="linear",kernel_initializer=init,bias_initializer="zeros"))
+    opts={"SGD":keras.optimizers.SGD,"RMSProp":keras.optimizers.RMSprop,"ADAM":keras.optimizers.Adam}
+    m.compile(optimizer=opts[c.optimizer](learning_rate=c.ogrenme_orani),loss="mse")
+    return m
 
-def save_csv(rows,path):
-    with path.open("w",encoding="utf-8-sig",newline="") as f:
-        writer=csv.DictWriter(f,fieldnames=list(rows[0].keys()))
-        writer.writeheader();writer.writerows(rows)
+def train(c,p,y):
+    m=network(c)
+    history=[]
+    snaps={}
+    epochs={0,1,2,5,10,25,50,100,200,300}
+    class Recorder(keras.callbacks.Callback):
+        def on_train_begin(self,logs=None):
+            snaps[0]=self.model.predict(p,verbose=0).ravel()
+        def on_epoch_end(self,epoch,logs=None):
+            history.append(float(logs["loss"]))
+            if epoch+1 in epochs:
+                snaps[epoch+1]=self.model.predict(p,verbose=0).ravel()
+    tic=time.perf_counter()
+    m.fit(p,y,epochs=EPOCHS,batch_size=len(p),shuffle=False,callbacks=[Recorder()],verbose=0)
+    seconds=round(time.perf_counter()-tic,3)
+    pred=m.predict(p,verbose=0).ravel()
+    truth=y.ravel()
+    mse=float(np.mean((truth-pred)**2))
+    rmse=float(np.sqrt(mse))
+    r2=float(1-sum((truth-pred)**2)/sum((truth-truth.mean())**2))
+    valid=bool(np.isfinite([mse,rmse,r2]).all())
+    result={"kod":c.kod,"karsilastirma":c.grup,"degisken":c.deger,
+            "aktivasyon":c.aktivasyon,"ogrenme_orani":c.ogrenme_orani,
+            "optimizer":c.optimizer,"dagilim":c.dagilim,
+            "gizli_katman":c.gizli_katman,"noron":c.noron,
+            "epoch":EPOCHS,"seed":SEED,
+            "MSE":mse if valid else None,"RMSE":rmse if valid else None,
+            "R2":r2 if valid else None,"sure_sn":seconds,
+            "durum":"OK" if valid else "SAYISAL_KARARSIZLIK"}
+    return result,history,snaps,pred
+
+def save_csv(rows):
+    with (OUT/"821_karsilastirmalar.csv").open("w",newline="",encoding="utf-8-sig") as f:
+        w=csv.DictWriter(f,fieldnames=list(rows[0]))
+        w.writeheader();w.writerows(rows)
+
+def draw_best(history,snaps,p,y,pred):
+    xs=np.arange(1,EPOCHS+1)
+    var=float(np.mean((y-y.mean())**2))
+    fig,ax=plt.subplots(figsize=(8,4))
+    ax.plot(xs,np.maximum(history,1e-12));ax.set_yscale("log")
+    ax.set(xlabel="Epoch",ylabel="MSE (log)",title="Epoch / MSE")
+    fig.tight_layout();fig.savefig(FIG/"01_epoch_mse_log.png");plt.close(fig)
+    fig,ax=plt.subplots(figsize=(8,4))
+    ax.plot(xs,1-np.array(history)/var)
+    ax.set(xlabel="Epoch",ylabel="R2",title="Epoch / R2")
+    fig.tight_layout();fig.savefig(FIG/"02_epoch_r2.png");plt.close(fig)
+    fig,ax=plt.subplots(figsize=(8,4))
+    ax.plot(p,y,label="Hedef");ax.plot(p,pred,label="Tahmin")
+    ax.set(xlabel="p",ylabel="y",title="Hedef / Cikis")
+    ax.legend();fig.tight_layout();fig.savefig(FIG/"03_hedef_cikis.png");plt.close(fig)
+    fig,axs=plt.subplots(2,5,figsize=(14,6),sharex=True,sharey=True)
+    for ax,e in zip(axs.flat,[0,1,2,5,10,25,50,100,200,300]):
+        ax.plot(p,y,label="Hedef");ax.plot(p,snaps[e],label="Cikis")
+        ax.set_title(f"Epoch {e}")
+    axs.flat[0].legend();fig.tight_layout()
+    fig.savefig(FIG/"04_epoch_hedef_cikis.png");plt.close(fig)
 
 def main():
-    cli=argparse.ArgumentParser()
-    cli.add_argument("--quick",action="store_true")
-    args=cli.parse_args()
-    out=HERE/("hizli_test" if args.quick else "sonuclar")
-    out.mkdir(exist_ok=True)
-    d=dataset();seed_all()
-    designs=experiments(args.quick)
-    path=out/"821_deney_sonuclari.csv"
-    existing={}
-    if path.exists():
-        with path.open(encoding="utf-8-sig",newline="") as f:
-            for r in csv.DictReader(f):
-                for k in ("learning_rate","val_mse","val_rmse","val_mae","val_r2","seconds"):
-                    r[k]=float(r[k])
-                for k in ("units","hidden_layers","batch_size","max_epochs","epochs_trained"):
-                    r[k]=int(r[k])
-                existing[r["model_id"]]=r
-    result=[]
-    for i,exp in enumerate(designs,1):
-        if exp.model_id in existing:
-            row=existing[exp.model_id]
-        else:
-            row,_=train(exp,d)
-            existing[exp.model_id]=row
-        result.append(row)
-        save_csv(list(existing.values()),path)
-        print(f"{i}/{len(designs)} {exp.model_id} MAE={row['val_mae']:.2f}",flush=True)
-    best=min(result,key=lambda r:(r["val_mae"],r["model_id"]))
-    best_exp=next(e for e in designs if e.model_id==best["model_id"])
-    _,final_model=train(best_exp,d)
-    testpred=d["y_scaler"].inverse_transform(
-        final_model.predict(d["x_test"],verbose=0)).ravel()
-    summary={
-        "student_last_three":"821","seed":SEED,
-        "keras_version":keras.__version__,"backend":keras.backend.backend(),
-        "dataset":"sklearn.datasets.load_diabetes",
-        "train_count":len(d["x_train"]),"validation_count":len(d["x_val"]),
-        "test_count":len(d["x_test"]),"n_experiments":len(result),
-        "best_experiment_id":best_exp.model_id,
-        "best_validation_mae":best["val_mae"],
-        "best_hyperparameters":asdict(best_exp),
-        "final_test_metrics":metrics(d["y_test_original"],testpred)
-    }
-    save_csv(result,path)
-    (out/"821_ozet.json").write_text(
-        json.dumps(summary,indent=2,ensure_ascii=False),encoding="utf-8")
-    print("FINAL:",json.dumps(summary,ensure_ascii=False,indent=2))
+    OUT.mkdir(exist_ok=True);FIG.mkdir(exist_ok=True)
+    p=np.linspace(-2,2,201,dtype=np.float32).reshape(-1,1)
+    y=(1+np.sin(np.pi*p/4)).astype(np.float32)
+    rows=[]
+    for c in configurations():
+        row,_,_,_=train(c,p,y)
+        rows.append(row);save_csv(rows)
+        print(c.kod,c.grup,c.deger,"MSE",row["MSE"],flush=True)
+    valid=[r for r in rows if r["MSE"] is not None]
+    best=min(valid,key=lambda r:r["MSE"])
+    winners={}
+    for group in dict.fromkeys(r["karsilastirma"] for r in rows):
+        candidates=[r for r in valid if r["karsilastirma"]==group]
+        winners[group]=min(candidates,key=lambda r:r["MSE"])["kod"] if candidates else None
+    config=next(c for c in configurations() if c.kod==best["kod"])
+    _,h,s,pred=train(config,p,y)
+    draw_best(h,s,p.ravel(),y.ravel(),pred)
+    summary={"tohum":SEED,"her_deney_epoch":EPOCHS,
+             "deney_sayisi":len(rows),"en_iyi_deney":best,
+             "grup_birincileri":winners,
+             "uyari":"Belgedeki sin(pi*y/4) ifadesi sin(pi*p/4) varsayildi; hocaya teyit."}
+    (OUT/"821_ozet.json").write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding="utf-8")
+    print("Bitti:",best["kod"],flush=True)
 
 if __name__=="__main__":
     main()
