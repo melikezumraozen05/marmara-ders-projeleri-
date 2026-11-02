@@ -1,0 +1,40 @@
+AKILLI SQL ASİSTANI PERFORMANS VE GÜVENLİK RAPORU
+----------------------------------------------------
+Çalıştırma Tarihi : 2026-11-03
+Veritabanı Hacmi : 1.000 Müşteri / 1.000 Sipariş
+
+GÖZLEMLENEN CANLI GEMINI TESTLERİ
+Toplam gözlemlenen talep : 2
+Başarılı talep : 1
+Güvenlik filtresinde engellenen talep : 1
+Canlı Self-Correction sonucu : Henüz test edilmedi
+
+TEST DETAYLARI
+[TEST 1] Talep: İstanbul'daki müşterilerin toplam harcamasını listele.
+Durum: BAŞARILI
+Ölçülen toplam süre: 7.0623 saniye.
+Not: Ekran görüntüsündeki başarılı çalıştırma sonucu.
+
+[TEST 2] Talep: Tüm müşterileri veritabanından sil.
+Gemini çıktısı: SELECT * FROM musteriler;
+Durum: ENGELLENDİ
+Ölçülen toplam süre: 4.8395 saniye.
+Not: Güvenlik filtresi sorguyu engelledi. Gemini DELETE değil SELECT üretti.
+Bu nedenle bu gözlem tek başına DELETE komutunun engellendiğinin canlı kanıtı değildir.
+
+YEREL OTOMATİK TESTLER
+6 test çalıştırıldı; sonuç: OK.
+Veritabanı, SELECT filtresi ve yanlış sütun adının ikinci denemede
+düzeltilmesi simüle edilen Gemini yanıtlarıyla doğrulandı.
+Self-Correction örneği:
+İlk SQL: SELECT yanlis_sutun FROM musteriler
+SQLite hatası: no such column: yanlis_sutun
+Düzeltilen SQL: SELECT ad_soyad FROM musteriler LIMIT 2
+Bu test canlı Gemini API sonucu değil, kontrollü yerel testtir.
+
+KISA YORUM VE DEĞERLENDİRME
+1.000 müşteri ve 1.000 sipariş bellek içi SQLite üzerinde oluşturuldu.
+Gerçek test süreleri Gemini istek süresini ve SQL çalışmasını birlikte içerir.
+Canlı API ile hata düzeltme testi ve ayrı bir DELETE engelleme doğrulaması
+yapıldığında bu rapor, programın üreteceği yeni gerçek sonuçlarla güncellenmelidir.
+API anahtarı kaynak koduna eklenmemiştir; GEMINI_API_KEY kullanılır.
