@@ -1,5 +1,0 @@
-keras>=3.10,<4
-numpy>=1.26
-scikit-learn>=1.4
-matplotlib>=3.8
-torch>=2.2
