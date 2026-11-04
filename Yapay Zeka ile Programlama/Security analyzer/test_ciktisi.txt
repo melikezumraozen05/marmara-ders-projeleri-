@@ -1,0 +1,138 @@
+===========================================================================
+                  GEMINI 3.8 FLASH KOD GÜVENLİK ANALİZÖRÜ                  
+===========================================================================
+TEST: SQL Injection
+---------------------------------------------------------------------------
+GÜVENLİK ANALİZİ RAPORU
+
+1. Tespit Edilen Güvenlik Açığı: SQL Injection (SQL Enjeksiyonu) - Kullanıcıdan alınan girdinin temizlenmeden veya parametreleştirilmeden doğrudan SQL sorgusuna eklenmesiyle oluşan yüksek riskli bir güvenlik zafiyetidir.
+
+2. Neden Oluştuğu: `kullanici_getir` fonksiyonu içerisinde SQL sorgusu oluşturulurken metin birleştirme (`+` operatörü) kullanılmıştır. `kullanici_adi` değişkeni doğrudan SQL dizgisinin bir parçası haline getirildiği için, veritabanı motoru kullanıcı girdisini kod olarak yorumlayabilir. Ayrıca veritabanı bağlantısı kapatılmayarak kaynak sızıntısına yol açılmıştır.
+
+3. Olası Etkileri: Saldırgan `admin' OR '1'='1` gibi zararlı ifadeler girerek sorgunun mantığını değiştirebilir. Bu durum saldırganın:
+- Veritabanındaki tüm kullanıcı verilerini ve hassas bilgileri yetkisiz olarak okumasına,
+- Kimlik doğrulama adımlarını atlatmasına,
+- Veritabanı izinlerine bağlı olarak verileri değiştirmesine veya silmesine olanak tanır.
+
+4. Güvenli ve Optimize Edilmiş Kod:
+```python
+import sqlite3
+
+def kullanici_getir(kullanici_adi):
+    # 'with' kullanımı bağlantının otomatik ve güvenli bir şekilde kapatılmasını sağlar.
+    with sqlite3.connect("veritabani.db") as conn:
+        cursor = conn.cursor()
+        # Parametreli sorgu (?) kullanılarak girdi veri olarak işlenir, SQL kodu olarak çalıştırılamaz.
+        sorgu = "SELECT * FROM kullanicilar WHERE ad = ?"
+        cursor.execute(sorgu, (kullanici_adi,))
+        return cursor.fetchall()
+
+if __name__ == "__main__":
+    girdi = input("Kullanıcı adı: ")
+    print(kullanici_getir(girdi))
+```
+===========================================================================
+TEST: Sabit Parola Kullanımı
+---------------------------------------------------------------------------
+GÜVENLİK ANALİZİ RAPORU
+
+1. Tespit Edilen Güvenlik Açığı: Sabit Kodlanmış Hassas Bilgiler (Hardcoded Credentials) ve API Anahtarı Sızıntısı.
+
+2. Neden Oluştuğu: Veritabanı kullanıcı adı, parolası, sunucu IP adresi ve canlı ortama ait API anahtarı (API Key) gibi kritik ve hassas verilerin doğrudan kaynak kod içerisine düz metin (plaintext) olarak yazılmasından kaynaklanmaktadır. 
+
+3. Olası Etkileri: Kaynak koda erişimi olan (yetkili/yetkisiz personeller, açık kaynak depoları, kaza sonucu sızdırılan Git repoları vb.) herhangi bir saldırgan, veritabanı sunucusuna yetkisiz erişim sağlayabilir. Veritabanındaki hassas verileri çalabilir, silebilir veya değiştirebilir. Ayrıca sızan API anahtarını kullanarak harici servisler üzerinde yetkisiz işlemler gerçekleştirebilir ve finansal/operasyonel zararlara yol açabilir.
+
+4. Güvenli ve Optimize Edilmiş Kod:
+```python
+import os
+import mysql.connector
+from mysql.connector import Error
+
+# Hassas bilgiler çevre değişkenlerinden (Environment Variables) okunmalıdır.
+# Bu değişkenler sistemde veya bir .env dosyasında tanımlanmalıdır.
+DB_HOST = os.getenv("DB_HOST")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_NAME = os.getenv("DB_NAME", "sirket")
+
+def baglan():
+    """
+    Veritabanına güvenli bir şekilde bağlanır ve hata yönetimini sağlar.
+    """
+    if not all([DB_HOST, DB_USER, DB_PASSWORD]):
+        raise ValueError("Eksik veritabanı bağlantı bilgileri! Çevre değişkenlerini kontrol edin.")
+
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME
+        )
+        if connection.is_connected():
+            return connection
+    except Error as e:
+        # Hata detayları loglanmalı, doğrudan kullanıcıya gösterilmemelidir.
+        print(f"Veritabanı bağlantı hatası: {e}")
+        return None
+```
+===========================================================================
+TEST: Komut Enjeksiyonu
+---------------------------------------------------------------------------
+GÜVENLİK ANALİZİ RAPORU
+
+1. Tespit Edilen Güvenlik Açığı: İşletim Sistemi Komut Enjeksiyonu (OS Command Injection). Kullanıcıdan alınan doğrulanmamış girdinin doğrudan kabuk (shell) komutuna dahil edilmesiyle oluşan yüksek riskli bir güvenlik açığıdır.
+
+2. Neden Oluştuğu: `os.system()` fonksiyonu verilen dizgeyi varsayılan sistem kabuğunda çalıştırır. Kod içinde `hedef` değişkeni kullanıcıdan `input()` ile alındıktan sonra hiçbir temizleme (sanitization) veya doğrulama (validation) işleminden geçirilmeden doğrudan `ping -c 4 ` komutunun sonuna eklenmiştir.
+
+3. Olası Etkileri: Saldırgan, girdi alanına noktalı virgül (`;`), ve işareti (`&&`), boru (`|`) gibi kabuk özel karakterleri ekleyerek `ping` komutunun yanında kendi istediği komutları da çalıştırabilir (örneğin: `8.8.8.8 ; cat /etc/passwd` veya `8.8.8.8 && rm -rf /`). Bu durum, uygulamanın çalıştığı kullanıcının yetkileri dahilinde Sunucuda Uzaktan Kod Çalıştırma (RCE), hassas verilerin sızdırılması veya sistemin tamamen ele geçirilmesi ile sonuçlanabilir.
+
+4. Güvenli ve Optimize Edilmiş Kod:
+```python
+import ipaddress
+import re
+import subprocess
+
+
+def is_valid_target(hedef):
+    # Öncellikle geçerli bir IP adresi mi kontrol et
+    try:
+        ipaddress.ip_address(hedef)
+        return True
+    except ValueError:
+        pass
+
+    # IP değilse geçerli bir Domain (alan adı) mi kontrol et
+    domain_regex = r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$"
+    return bool(re.match(domain_regex, hedef))
+
+
+def ping_at(hedef):
+    # 1. Girdi Doğrulama (Input Validation)
+    if not is_valid_target(hedef):
+        print("Hata: Geçersiz IP adresi veya alan adı girdiniz!")
+        return
+
+    try:
+        # 2. Güvenli Komut Çalıştırma: shell=False (varsayılan) ile bağımsız parametre listesi kullanımı.
+        # Bu yöntem komut enjeksiyonunu tamamen engeller.
+        sonuc = subprocess.run(
+            ["ping", "-c", "4", hedef],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        print(sonuc.stdout)
+    except subprocess.CalledProcessError as e:
+        print(f"Ping işlemi başarısız oldu:\n{e.stderr}")
+    except FileNotFoundError:
+        print("Hata: 'ping' komutu sistemde bulunamadı.")
+
+
+if __name__ == "__main__":
+    hedef_girdisi = input("Ping atılacak adres: ").strip()
+    ping_at(hedef_girdisi)
+```
+===========================================================================
+                     TÜM GÜVENLİK TESTLERİ TAMAMLANDI                     
+===========================================================================
