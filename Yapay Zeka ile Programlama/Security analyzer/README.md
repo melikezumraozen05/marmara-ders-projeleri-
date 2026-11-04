@@ -1,21 +1,34 @@
-# Security analyzer — Kod Güvenlik Analizörü
+# Security analyzer — Yapay Zekâ ile Kod Güvenlik Analizi
 
 **Ders:** Yapay Zeka ile Programlama
 
-## Proje hakkında
-Python kodlarında aşağıdaki üç güvenlik açığını yapay zekâ ile analiz etme ödevi:
+Bu Python projesi, Gemini API yardımıyla örnek Python kodlarında statik güvenlik analizi yapar. Kod örnekleri çalıştırılmaz.
 
-1. SQL Injection
-2. Sabit Parola Kullanımı (Hardcoded Credentials)
-3. Komut Enjeksiyonu (OS Command Injection)
+## Analiz edilen açıklar
 
-Analiz raporunda açığın tanımı, nedeni, olası etkileri ve güvenli kod önerisi bulunur.
+1. SQL Injection — parametreleştirilmemiş SQL sorgusu.
+2. Sabit Parola Kullanımı — kaynak kodda parola saklanması.
+3. Komut Enjeksiyonu — kullanıcı girdisinin kabuk komutlarına eklenmesi.
 
-## Test sonuçları hakkında
-Üç test için başarılı analiz çıktıları kullanıcı tarafından VS Code ekran görüntüleriyle doğrulandı. Claude'un aktardığı bilgiye göre bu **başarılı analizler `gemini-3.5-flash`** ile alınmıştır. `gemini-3.8-flash` denemelerinde 503 hatası görülmüştür; 3.8 başlığı gerçek kullanılan modeli kanıtlamaz.
+Her analizde risk, nedeni, olası etkiler ve güvenli kod önerisi Türkçe raporlanır.
 
-## Dosyalar
-Güncellenmiş `security_analyzer.py`, gerçek `test_ciktisi.txt`, görseller ve video, yerel proje sürümünden teslim klasörüne aktarılacaktır.
+## Kurulum
 
-## Güvenlik
-Gerçek API anahtarını içeren `.env` dosyası ve diğer gizli bilgiler **GitHub'a yüklenmez**.
+Python 3.10+ gereklidir.
+
+```powershell
+py -m pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+`.env` dosyasındaki `GEMINI_API_KEY` alanına kendi anahtarınızı yazın. **Anahtarı GitHub'a yüklemeyin.** Modeli `GEMINI_MODEL` ile değiştirebilirsiniz.
+
+```powershell
+py security_analyzer.py
+```
+
+## Test kayıtları ve model notu
+
+`test_ciktisi.txt` dosyasında üç teste ait başarıyla üretilmiş analizler yer alır. Çıktı başlığında “Gemini 3.8 Flash” yazmaktadır. Ancak testi çalıştıran Claude'un aktardığına göre başarılı analizler **gemini-3.5-flash** kullanılarak alınmıştır; `gemini-3.8-flash` denemelerinde 503 hatası görülmüştür. Başlık, çalıştırmada kullanılan modeli doğrulamaz.
+
+Bu depo, yüklenen yerel Python dosyasında görülen gizli anahtar benzeri sabit değeri içermez. API anahtarı yalnızca `.env` üzerinden okunur. Yapay zekâ önerileri bağımsız güvenlik doğrulamasının yerine geçmez.
