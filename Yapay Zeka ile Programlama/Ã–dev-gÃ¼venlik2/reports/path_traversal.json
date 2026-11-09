@@ -1,0 +1,20 @@
+{
+  "file": "samples/path_traversal.py",
+  "finding_count": 1,
+  "findings": [
+    {
+      "type": "Path Traversal",
+      "severity": "Kritik",
+      "evidence": "target = base_dir / filename\n    with open(target, \"r\", encoding=\"utf-8\") as file:\n        return file.read()",
+      "cause": "Kullanıcıdan gelen 'filename' girdisi, herhangi bir doğrulama veya sterilizasyon işlemine tabi tutulmadan doğrudan 'base_dir' ile birleştirilmekte ve dosya okuma işleminde kullanılmaktadır.",
+      "impact": "Saldırganlar '../' dizin karakterlerini kullanarak 'uploads' dizini dışındaki hassas sistem dosyalarına (örneğin /etc/passwd veya .env) erişebilir ve gizli bilgileri okuyabilir.",
+      "secure_code": "def kullanici_dosyasi_oku(filename: str) -> str:\n    base_dir = Path(\"uploads\").resolve()\n    target = (base_dir / filename).resolve()\n    if not target.is_relative_to(base_dir):\n        raise ValueError(\"Geçersiz dosya yolu.\")\n    with open(target, \"r\", encoding=\"utf-8\") as file:\n        return file.read()"
+    }
+  ],
+  "risk_summary": {
+    "Kritik": 1,
+    "Yüksek": 0,
+    "Orta": 0,
+    "Düşük": 0
+  }
+}

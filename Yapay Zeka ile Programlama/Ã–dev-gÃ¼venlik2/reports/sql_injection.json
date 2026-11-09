@@ -1,0 +1,20 @@
+{
+  "file": "samples/sql_injection.py",
+  "finding_count": 1,
+  "findings": [
+    {
+      "type": "SQL Injection",
+      "severity": "Kritik",
+      "evidence": "sorgu = \"SELECT * FROM kullanicilar WHERE ad = '\" + kullanici_adi + \"'\"",
+      "cause": "Kullanıcıdan gelen girdi (kullanici_adi), SQL sorgusuna doğrudan string birleştirme (concatenation) yoluyla eklenmiştir.",
+      "impact": "Saldırgan veritabanındaki tüm verilere erişebilir, verileri değiştirebilir, silebilir veya veritabanı yönetim sistemi üzerinde yetki yükseltebilir.",
+      "secure_code": "def kullanici_bul(kullanici_adi: str):\n    conn = sqlite3.connect(\"kullanicilar.db\")\n    sorgu = \"SELECT * FROM kullanicilar WHERE ad = ?\"\n    return conn.execute(sorgu, (kullanici_adi,)).fetchall()"
+    }
+  ],
+  "risk_summary": {
+    "Kritik": 1,
+    "Yüksek": 0,
+    "Orta": 0,
+    "Düşük": 0
+  }
+}

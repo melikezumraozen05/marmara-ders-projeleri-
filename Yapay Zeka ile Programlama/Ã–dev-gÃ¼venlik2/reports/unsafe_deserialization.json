@@ -1,0 +1,20 @@
+{
+  "file": "samples/unsafe_deserialization.py",
+  "finding_count": 1,
+  "findings": [
+    {
+      "type": "Güvensiz Serileştirme (Insecure Deserialization)",
+      "severity": "Kritik",
+      "evidence": "return pickle.loads(request_body)",
+      "cause": "pickle modülü, güvenilmeyen verileri işlerken rastgele Python kodlarının çalıştırılmasına (RCE) izin veren güvensiz bir deserialization mekanizmasına sahiptir.",
+      "impact": "Saldırgan, HTTP isteği gövdesi üzerinden kötü amaçlıpickle verisi göndererek sunucu üzerinde yetkisiz kod çalıştırabilir ve sistem ele geçirilebilir.",
+      "secure_code": "import json\n\ndef istek_govdesini_coz(request_body: bytes):\n    # pickle yerine güvenli veri formatları (örn. JSON) kullanılmalıdır.\n    return json.loads(request_body.decode('utf-8'))"
+    }
+  ],
+  "risk_summary": {
+    "Kritik": 1,
+    "Yüksek": 0,
+    "Orta": 0,
+    "Düşük": 0
+  }
+}

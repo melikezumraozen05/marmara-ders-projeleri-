@@ -1,0 +1,11 @@
+{
+  "file": "samples/safe_code.py",
+  "finding_count": 0,
+  "findings": [],
+  "risk_summary": {
+    "Kritik": 0,
+    "Yüksek": 0,
+    "Orta": 0,
+    "Düşük": 0
+  }
+}

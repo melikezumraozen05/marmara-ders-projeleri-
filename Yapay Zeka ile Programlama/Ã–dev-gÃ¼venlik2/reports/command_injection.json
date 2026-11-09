@@ -1,0 +1,20 @@
+{
+  "file": "samples/command_injection.py",
+  "finding_count": 1,
+  "findings": [
+    {
+      "type": "Komut Enjeksiyonu (Command Injection)",
+      "severity": "Kritik",
+      "evidence": "os.system(\"ls \" + klasor_adi)",
+      "cause": "Kullanıcıdan veya dış kaynaklardan gelen güvenilmeyen 'klasor_adi' girdisinin, herhangi bir doğrulama veya sterilizasyon (sanitization) yapılmadan doğrudan işletim sistemi komutuna string birleştirme yöntemiyle eklenmesi.",
+      "impact": "Saldırgan, 'klasor_adi' parametresine zararlı komutlar ekleyerek (örneğin; '; rm -rf /') sunucu üzerinde yetkisiz kod çalıştırabilir, hassas verileri ele geçirebilir veya sistemin bütünlüğünü bozabilir.",
+      "secure_code": "import subprocess\n\ndef dosya_listele(klasor_adi: str):\n    # subprocess kullanarak komutu ve argümanları dizi olarak vermek komut enjeksiyonunu önler\n    subprocess.run([\"ls\", klasor_adi], check=True)"
+    }
+  ],
+  "risk_summary": {
+    "Kritik": 1,
+    "Yüksek": 0,
+    "Orta": 0,
+    "Düşük": 0
+  }
+}
